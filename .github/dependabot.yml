@@ -24,7 +24,7 @@ updates:
         patterns:
           - "go.fork.vn/config"
           - "go.fork.vn/di"
-          - "go.mongodb.org/mongo-driver"
+          - "go.fork.vn/redis"
     allow:
       # Only allow updates for direct dependencies
       - dependency-type: "direct"
