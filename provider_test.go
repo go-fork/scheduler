@@ -3,172 +3,273 @@ package scheduler
 import (
 	"testing"
 
+	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	configMocks "go.fork.vn/config/mocks"
 	"go.fork.vn/di"
+	diMocks "go.fork.vn/di/mocks"
+	redisMocks "go.fork.vn/redis/mocks"
 )
 
-// MockApp implements the interface required by ServiceProvider
-type MockApp struct {
-	container *di.Container
-}
-
-func (m *MockApp) Container() *di.Container {
-	return m.container
-}
-
 func TestServiceProviderRegister(t *testing.T) {
-	// Tạo DI container
-	container := di.New()
-	app := &MockApp{container: container}
+	// Tạo mock objects
+	mockApp := diMocks.NewMockApplication(t)
+	mockContainer := diMocks.NewMockContainer(t)
+
+	// Setup expectations
+	mockApp.EXPECT().Container().Return(mockContainer)
+	mockContainer.EXPECT().Make("config").Return(nil, assert.AnError)
+	mockContainer.EXPECT().Instance("scheduler", mock.AnythingOfType("*scheduler.manager"))
 
 	// Tạo service provider
 	provider := NewServiceProvider()
 
 	// Test Register
-	provider.Register(app)
+	provider.Register(mockApp)
 
-	// Kiểm tra scheduler đã được đăng ký vào container
-	instance, err := container.Make("scheduler")
-	if err != nil {
-		t.Fatalf("Failed to get scheduler from container: %v", err)
-	}
-
-	scheduler, ok := instance.(Manager)
-	if !ok {
-		t.Fatal("Registered instance is not a Manager")
-	}
-
-	if scheduler == nil {
-		t.Fatal("Scheduler is nil")
-	}
+	// Verify expectations
+	mockApp.AssertExpectations(t)
+	mockContainer.AssertExpectations(t)
 }
 
-func TestServiceProviderRegisterWithNilApp(t *testing.T) {
+func TestServiceProviderRegisterWithConfig(t *testing.T) {
+	// Tạo mock objects
+	mockApp := diMocks.NewMockApplication(t)
+	mockContainer := diMocks.NewMockContainer(t)
+	mockConfig := configMocks.NewMockManager(t)
+
+	// Setup expectations
+	mockApp.EXPECT().Container().Return(mockContainer)
+	mockContainer.EXPECT().Make("config").Return(mockConfig, nil)
+	mockConfig.EXPECT().UnmarshalKey("scheduler", mock.AnythingOfType("*scheduler.Config")).Return(nil)
+	mockContainer.EXPECT().Instance("scheduler", mock.AnythingOfType("*scheduler.manager"))
+
+	// Tạo service provider
 	provider := NewServiceProvider()
 
-	// Test với app không implement Container()
-	provider.Register("invalid-app")
+	// Test Register với config
+	provider.Register(mockApp)
 
-	// Test này không nên panic
+	// Verify expectations
+	mockApp.AssertExpectations(t)
+	mockContainer.AssertExpectations(t)
+	mockConfig.AssertExpectations(t)
 }
 
-func TestServiceProviderRegisterWithNilContainer(t *testing.T) {
-	app := &MockApp{container: nil}
-	provider := NewServiceProvider()
+func TestServiceProviderRegisterWithDistributedLock(t *testing.T) {
+	// Test that distributed lock configuration panics when Redis client ping fails
+	// since we can't easily mock a working Redis client in unit tests
 
-	// Test với container nil - nên panic
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("Expected panic when container is nil")
+	// Tạo mock objects
+	mockApp := diMocks.NewMockApplication(t)
+	mockContainer := diMocks.NewMockContainer(t)
+	mockConfig := configMocks.NewMockManager(t)
+	mockRedis := redisMocks.NewMockManager(t)
+	mockRedisClient := &redis.Client{} // This will be nil and cause ping to fail
+
+	// Tạo config với distributed lock enabled
+	cfg := DefaultConfig()
+	cfg.DistributedLock.Enabled = true
+
+	// Setup expectations
+	mockApp.EXPECT().Container().Return(mockContainer)
+	mockContainer.EXPECT().Make("config").Return(mockConfig, nil)
+	mockConfig.EXPECT().UnmarshalKey("scheduler", mock.AnythingOfType("*scheduler.Config")).Run(func(key string, target interface{}) {
+		// Simulate config loading
+		if config, ok := target.(*Config); ok {
+			*config = cfg
 		}
-	}()
+	}).Return(nil)
+	mockContainer.EXPECT().Make("redis").Return(mockRedis, nil)
+	mockRedis.EXPECT().Client().Return(mockRedisClient, nil)
 
-	provider.Register(app)
+	// Tạo service provider
+	provider := NewServiceProvider()
+
+	// Test should panic because Redis ping will fail with nil client
+	assert.Panics(t, func() {
+		provider.Register(mockApp)
+	})
+
+	// Verify expectations (note: Instance expectation removed since it panics before reaching that point)
+	mockApp.AssertExpectations(t)
+	mockContainer.AssertExpectations(t)
+	mockConfig.AssertExpectations(t)
+	mockRedis.AssertExpectations(t)
+}
+
+func TestServiceProviderRegisterPanics(t *testing.T) {
+	tests := []struct {
+		name      string
+		setupMock func() *diMocks.MockApplication
+	}{
+		{
+			name: "panic when container is nil",
+			setupMock: func() *diMocks.MockApplication {
+				mockApp := diMocks.NewMockApplication(t)
+				mockApp.EXPECT().Container().Return(nil)
+				return mockApp
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockApp := tt.setupMock()
+			provider := NewServiceProvider()
+
+			assert.Panics(t, func() {
+				provider.Register(mockApp)
+			})
+		})
+	}
 }
 
 func TestServiceProviderBoot(t *testing.T) {
-	// Tạo DI container và đăng ký scheduler
-	container := di.New()
-	app := &MockApp{container: container}
-	provider := NewServiceProvider()
+	// Tạo mock objects
+	mockApp := diMocks.NewMockApplication(t)
+	mockContainer := diMocks.NewMockContainer(t)
+	mockConfig := configMocks.NewMockManager(t)
 
-	// Register trước
-	provider.Register(app)
+	// Tạo scheduler manager cho test
+	manager := NewScheduler()
+
+	// Setup expectations
+	mockApp.EXPECT().Container().Return(mockContainer)
+	mockContainer.EXPECT().Make("scheduler").Return(manager, nil)
+	mockContainer.EXPECT().Make("config").Return(mockConfig, nil)
+	mockConfig.EXPECT().UnmarshalKey("scheduler", mock.AnythingOfType("*scheduler.Config")).Return(nil)
+
+	// Tạo service provider
+	provider := NewServiceProvider()
 
 	// Test Boot
-	provider.Boot(app)
+	provider.Boot(mockApp)
 
-	// Lấy scheduler và kiểm tra nó đã được start
-	instance, err := container.Make("scheduler")
-	if err != nil {
-		t.Fatalf("Failed to get scheduler from container: %v", err)
-	}
-
-	scheduler, ok := instance.(Manager)
-	if !ok {
-		t.Fatal("Instance is not a Manager")
-	}
-
-	// Kiểm tra scheduler đã được start
-	if !scheduler.IsRunning() {
-		t.Fatal("Scheduler should be running after Boot")
-	}
+	// Verify expectations
+	mockApp.AssertExpectations(t)
+	mockContainer.AssertExpectations(t)
+	mockConfig.AssertExpectations(t)
 
 	// Cleanup
-	scheduler.Stop()
-}
-
-func TestServiceProviderBootWithNilApp(t *testing.T) {
-	provider := NewServiceProvider()
-
-	// Test với app không implement Container()
-	provider.Boot("invalid-app")
-
-	// Test này không nên panic
-}
-
-func TestServiceProviderBootWithNilContainer(t *testing.T) {
-	app := &MockApp{container: nil}
-	provider := NewServiceProvider()
-
-	// Test với container nil
-	provider.Boot(app)
-
-	// Test này không nên panic
-}
-
-func TestServiceProviderBootWithoutScheduler(t *testing.T) {
-	// Tạo container nhưng không đăng ký scheduler
-	container := di.New()
-	app := &MockApp{container: container}
-	provider := NewServiceProvider()
-
-	// Test Boot mà không có scheduler trong container
-	provider.Boot(app)
-
-	// Test này không nên panic
-}
-
-func TestServiceProviderBootTwice(t *testing.T) {
-	// Tạo DI container và đăng ký scheduler
-	container := di.New()
-	app := &MockApp{container: container}
-	provider := NewServiceProvider()
-
-	// Register trước
-	provider.Register(app)
-
-	// Boot lần đầu
-	provider.Boot(app)
-
-	// Boot lần hai - không nên start lại scheduler
-	provider.Boot(app)
-
-	// Lấy scheduler và kiểm tra nó vẫn đang chạy
-	instance, err := container.Make("scheduler")
-	if err != nil {
-		t.Fatalf("Failed to get scheduler from container: %v", err)
+	if manager.IsRunning() {
+		manager.Stop()
 	}
+}
 
-	scheduler, ok := instance.(Manager)
-	if !ok {
-		t.Fatal("Instance is not a Manager")
-	}
+func TestServiceProviderBootWithAutoStart(t *testing.T) {
+	// Tạo mock objects
+	mockApp := diMocks.NewMockApplication(t)
+	mockContainer := diMocks.NewMockContainer(t)
+	mockConfig := configMocks.NewMockManager(t)
 
-	// Kiểm tra scheduler vẫn đang chạy
-	if !scheduler.IsRunning() {
-		t.Fatal("Scheduler should still be running after second Boot")
-	}
+	// Tạo scheduler manager cho test
+	manager := NewScheduler()
+
+	// Tạo config với AutoStart enabled
+	cfg := DefaultConfig()
+	cfg.AutoStart = true
+
+	// Setup expectations
+	mockApp.EXPECT().Container().Return(mockContainer)
+	mockContainer.EXPECT().Make("scheduler").Return(manager, nil)
+	mockContainer.EXPECT().Make("config").Return(mockConfig, nil)
+	mockConfig.EXPECT().UnmarshalKey("scheduler", mock.AnythingOfType("*scheduler.Config")).Run(func(key string, target interface{}) {
+		// Simulate config loading
+		if config, ok := target.(*Config); ok {
+			*config = cfg
+		}
+	}).Return(nil)
+
+	// Tạo service provider
+	provider := NewServiceProvider()
+
+	// Test Boot với AutoStart
+	provider.Boot(mockApp)
+
+	// Verify scheduler đã được start
+	assert.True(t, manager.IsRunning(), "Scheduler should be running with AutoStart enabled")
+
+	// Verify expectations
+	mockApp.AssertExpectations(t)
+	mockContainer.AssertExpectations(t)
+	mockConfig.AssertExpectations(t)
 
 	// Cleanup
-	scheduler.Stop()
+	manager.Stop()
+}
+
+func TestServiceProviderBootPanics(t *testing.T) {
+	tests := []struct {
+		name      string
+		setupMock func() *diMocks.MockApplication
+	}{
+		{
+			name: "panic when container is nil",
+			setupMock: func() *diMocks.MockApplication {
+				mockApp := diMocks.NewMockApplication(t)
+				mockApp.EXPECT().Container().Return(nil)
+				return mockApp
+			},
+		},
+		{
+			name: "panic when scheduler not found",
+			setupMock: func() *diMocks.MockApplication {
+				mockApp := diMocks.NewMockApplication(t)
+				mockContainer := diMocks.NewMockContainer(t)
+				mockApp.EXPECT().Container().Return(mockContainer)
+				mockContainer.EXPECT().Make("scheduler").Return(nil, assert.AnError)
+				return mockApp
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockApp := tt.setupMock()
+			provider := NewServiceProvider()
+
+			assert.Panics(t, func() {
+				provider.Boot(mockApp)
+			})
+		})
+	}
+}
+
+func TestServiceProviderRequires(t *testing.T) {
+	provider := NewServiceProvider()
+	requires := provider.Requires()
+
+	expectedRequires := []string{"config", "redis"}
+	assert.Equal(t, expectedRequires, requires)
+}
+
+func TestServiceProviderProviders(t *testing.T) {
+	provider := NewServiceProvider()
+
+	// Initially should be empty
+	providers := provider.Providers()
+	assert.Empty(t, providers)
+
+	// After registration should contain "scheduler"
+	mockApp := diMocks.NewMockApplication(t)
+	mockContainer := diMocks.NewMockContainer(t)
+
+	mockApp.EXPECT().Container().Return(mockContainer)
+	mockContainer.EXPECT().Make("config").Return(nil, assert.AnError)
+	mockContainer.EXPECT().Instance("scheduler", mock.AnythingOfType("*scheduler.manager"))
+
+	provider.Register(mockApp)
+
+	providers = provider.Providers()
+	assert.Contains(t, providers, "scheduler")
 }
 
 func TestNewServiceProvider(t *testing.T) {
 	provider := NewServiceProvider()
 
-	if provider == nil {
-		t.Fatal("NewServiceProvider() returned nil")
-	}
+	assert.NotNil(t, provider)
 
 	// Kiểm tra provider implement đúng interface
 	var _ di.ServiceProvider = provider

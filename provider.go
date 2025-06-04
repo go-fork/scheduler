@@ -42,26 +42,27 @@ func NewServiceProvider() di.ServiceProvider {
 // tạo một scheduler manager mới và đăng ký vào DI container của ứng dụng.
 //
 // Params:
-//   - app: interface{} - Đối tượng ứng dụng phải implement interface:
-//     Container() *di.Container - Trả về DI container
+//   - app: di.Application - Đối tượng ứng dụng implements di.Application interface
 //
 // Luồng thực thi:
-//  1. Kiểm tra app có implement Container() không, nếu không thì return
-//  2. Lấy container từ app, kiểm tra nếu nil thì panic
+//  1. Lấy container từ app
+//  2. Load cấu hình scheduler
 //  3. Tạo scheduler manager mới
-//  4. Đăng ký scheduler manager vào container với key "scheduler"
+//  4. Cấu hình distributed locking nếu được bật
+//  5. Đăng ký scheduler manager vào container với key "scheduler"
 //
 // Việc cấu hình và đăng ký các task sẽ được thực hiện bởi ứng dụng,
 // cho phép mỗi ứng dụng tùy chỉnh scheduler theo nhu cầu riêng.
-func (p *ServiceProvider) Register(app interface{}) {
-	// Lấy container từ app nếu có
-	appWithContainer, ok := app.(interface{ Container() *di.Container })
-	if !ok {
-		return // Không cần xử lý nếu app không implement Container()
-	}
-	container := appWithContainer.Container()
+//
+// Panics:
+//   - Nếu không thể lấy container từ application
+//   - Nếu không thể tạo scheduler manager
+//   - Nếu không thể đăng ký scheduler vào container
+//   - Nếu distributed locking được bật nhưng không thể cấu hình Redis locker
+func (p *ServiceProvider) Register(app di.Application) {
+	container := app.Container()
 	if container == nil {
-		panic("DI container is nil")
+		panic("scheduler: DI container is nil - cannot register scheduler service")
 	}
 
 	// Load cấu hình scheduler với default fallback
@@ -70,30 +71,50 @@ func (p *ServiceProvider) Register(app interface{}) {
 	// Thử lấy cấu hình từ config provider (optional)
 	if configInstance, err := container.Make("config"); err == nil {
 		if configManager, ok := configInstance.(config.Manager); ok {
-			// Load cấu hình từ file config, nếu lỗi thì sử dụng default
-			configManager.UnmarshalKey("scheduler", &cfg)
+			// Load cấu hình từ file config với error handling
+			if err := configManager.UnmarshalKey("scheduler", &cfg); err != nil {
+				panic("scheduler: failed to load scheduler configuration: " + err.Error())
+			}
 		}
 	}
 
 	// Tạo scheduler manager với cấu hình
 	manager := NewSchedulerWithConfig(cfg)
+	if manager == nil {
+		panic("scheduler: failed to create scheduler manager with config")
+	}
 
 	// Cấu hình distributed locking nếu được bật
 	if cfg.DistributedLock.Enabled {
-		if redisInstance, err := container.Make("redis"); err == nil {
-			// Thử lấy redis client từ redis provider
-			if redisManager, ok := redisInstance.(redis.Manager); ok {
-				if redisClient, err := redisManager.Client(); err == nil {
-					if locker, err := NewRedisLocker(redisClient, cfg.Options); err == nil {
-						manager = manager.WithDistributedLocker(locker)
-					}
-				}
-			}
+		redisInstance, err := container.Make("redis")
+		if err != nil {
+			panic("scheduler: distributed locking is enabled but redis service not found: " + err.Error())
+		}
+
+		redisManager, ok := redisInstance.(redis.Manager)
+		if !ok {
+			panic("scheduler: redis service is not a valid redis.Manager interface")
+		}
+
+		redisClient, err := redisManager.Client()
+		if err != nil {
+			panic("scheduler: failed to get redis client for distributed locking: " + err.Error())
+		}
+
+		locker, err := NewRedisLocker(redisClient, cfg.Options)
+		if err != nil {
+			panic("scheduler: failed to create Redis locker: " + err.Error())
+		}
+
+		manager = manager.WithDistributedLocker(locker)
+		if manager == nil {
+			panic("scheduler: failed to configure distributed locker on scheduler manager")
 		}
 	}
 
 	// Đăng ký scheduler manager vào container
 	container.Instance("scheduler", manager)
+
 	p.providers = append(p.providers, "scheduler")
 }
 
@@ -102,48 +123,59 @@ func (p *ServiceProvider) Register(app interface{}) {
 // Boot là một lifecycle hook của di.ServiceProvider mà thực hiện sau khi tất cả
 // các service provider đã được đăng ký xong.
 //
-// Trong trường hợp của SchedulerServiceProvider, có thể dùng Boot để:
+// Trong trường hợp của SchedulerServiceProvider, Boot thực hiện:
 // 1. Lấy scheduler manager từ container
-// 2. Bắt đầu scheduler trong chế độ async để nó sẵn sàng xử lý các task
+// 2. Load cấu hình scheduler để kiểm tra AutoStart
+// 3. Tự động start scheduler nếu AutoStart được bật
 //
 // Params:
-//   - app: interface{} - Đối tượng ứng dụng phải implement interface:
-//     Container() *di.Container - Trả về DI container
-func (p *ServiceProvider) Boot(app interface{}) {
-	// Lấy container từ app nếu có
-	appWithContainer, ok := app.(interface{ Container() *di.Container })
-	if !ok {
-		return // Không cần xử lý nếu app không implement Container()
-	}
-	container := appWithContainer.Container()
+//   - app: di.Application - Đối tượng ứng dụng implements di.Application interface
+//
+// Panics:
+//   - Nếu không thể lấy container từ application
+//   - Nếu không tìm thấy scheduler trong container
+//   - Nếu scheduler không đúng type Manager interface
+//   - Nếu không thể load cấu hình scheduler
+//   - Nếu AutoStart được bật nhưng không thể start scheduler
+func (p *ServiceProvider) Boot(app di.Application) {
+	container := app.Container()
 	if container == nil {
-		return // Không xử lý nếu container nil
+		panic("scheduler: DI container is nil during boot phase")
 	}
 
 	// Lấy scheduler manager từ container
 	instance, err := container.Make("scheduler")
 	if err != nil {
-		return // Không tìm thấy scheduler trong container
+		panic("scheduler: scheduler service not found in container during boot: " + err.Error())
 	}
+
 	scheduler, ok := instance.(Manager)
 	if !ok {
-		return // Không phải loại scheduler manager
+		panic("scheduler: registered scheduler service is not a valid Manager interface")
 	}
 
 	// Kiểm tra xem scheduler đã được start chưa
 	if scheduler.IsRunning() {
-		return // Scheduler đã được start rồi
+		return // Scheduler đã được start rồi, không cần làm gì thêm
 	}
 
 	// Lấy cấu hình để kiểm tra AutoStart
 	cfg := DefaultConfig()
 
-	// Thử lấy cấu hình từ config provider (optional)
-	if configInstance, err := container.Make("config"); err == nil {
-		if configManager, ok := configInstance.(config.Manager); ok {
-			// Load cấu hình từ file config, nếu lỗi thì sử dụng default
-			configManager.UnmarshalKey("scheduler", &cfg)
-		}
+	// Thử lấy cấu hình từ config provider (required cho AutoStart)
+	configInstance, err := container.Make("config")
+	if err != nil {
+		panic("scheduler: config service not found but required for AutoStart feature: " + err.Error())
+	}
+
+	configManager, ok := configInstance.(config.Manager)
+	if !ok {
+		panic("scheduler: config service is not a valid config.Manager interface")
+	}
+
+	// Load cấu hình từ file config với error handling
+	if err := configManager.UnmarshalKey("scheduler", &cfg); err != nil {
+		panic("scheduler: failed to load scheduler configuration during boot: " + err.Error())
 	}
 
 	// Chỉ auto start nếu được cấu hình để làm vậy

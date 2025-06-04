@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### Added
+- Automation scripts for release management and project maintenance
+- CODEOWNERS, FUNDING, and issue templates
+- Comprehensive CI/CD workflows
+
+### Fixed
+- Updated copyright attribution in LICENSE file
+- Fixed references from mongodb to scheduler in CODEOWNERS, issue templates, and release workflow
+
+### Changed
+- Updated `go.fork.vn/config` from v0.1.0 to v0.1.3
+- Updated `go.fork.vn/di` from v0.1.0 to v0.1.3
+- Updated `go.fork.vn/redis` from v0.1.0 to v0.1.2
+
+### Dependencies
+- **go.fork.vn/config v0.1.3**: Latest configuration management improvements
+- **go.fork.vn/di v0.1.3**: Enhanced dependency injection features
+- **go.fork.vn/redis v0.1.2**: Updated Redis connectivity and distributed locking
+
 ## v0.1.0 - 2025-05-31
 
 ### Added
@@ -29,7 +48,7 @@
 
 ### Technical Details
 - Initial release as standalone module `go.fork.vn/scheduler`
-- Repository located at `github.com/go-fork/scheduler`
+- Repository located at `github.com/Fork/scheduler`
 - Built with Go 1.23.9
 - Full test coverage and comprehensive documentation
 - Based on go-co-op/gocron with Redis integration
@@ -46,8 +65,8 @@
 - `go.fork.vn/config`: Configuration management
 - `go.fork.vn/redis`: Redis connectivity and distributed locking
 
-[Unreleased]: https://github.com/go-fork/scheduler/compare/v0.1.0...HEAD
-[v0.1.0]: https://github.com/go-fork/scheduler/releases/tag/v0.1.0
+[Unreleased]: github.com/go-fork/scheduler/compare/v0.1.0...HEAD
+[v0.1.0]: github.com/go-fork/scheduler/releases/tag/v0.1.0
 
 ## Features
 - Add mockery configuration and complete mocks support
