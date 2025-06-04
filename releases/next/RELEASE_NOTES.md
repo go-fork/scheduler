@@ -1,47 +1,42 @@
-# Release Notes - v0.1.1
+# Release Notes - v0.1.2
 
 ## Overview
-Phiên bản v0.1.1 tập trung vào việc cải thiện tài liệu, cập nhật dependencies và sửa lỗi cho package scheduler. Phiên bản này nâng cao tính ổn định và hiệu suất của hệ thống, đồng thời cải thiện trải nghiệm phát triển với tài liệu toàn diện hơn.
+Brief description of this release and its main purpose.
 
 ## What's New
 ### 🚀 Features
-- Thêm automation scripts cho việc quản lý phát hành và bảo trì dự án
-- Thêm CODEOWNERS, FUNDING và issue templates cho quản lý dự án tốt hơn
-- Thêm comprehensive CI/CD workflows
+- New feature 1
+- New feature 2
 
 ### 🐛 Bug Fixes
-- Sửa thông tin bản quyền trong LICENSE file
-- Sửa các references từ mongodb đến scheduler trong CODEOWNERS, issue templates và release workflow
-- Sửa vấn đề với ServiceProvider Interface để tương thích với go.fork.vn/di v0.1.3
-- Sửa lỗi type mismatch trong provider_test.go (*scheduler.schedulerManager -> *scheduler.manager)
-- Cải thiện distributed lock test để xử lý Redis client validation
+- Fix for issue #X
+- Fix for issue #Y
 
 ### 🔧 Improvements
-- Nâng cao xử lý lỗi với panic messages rõ ràng cho các lỗi quan trọng
-- Tăng cường test coverage với thêm config_test.go
+- Performance improvement 1
+- Code quality improvement 2
 
 ### 📚 Documentation
-- Tái cấu trúc toàn bộ tài liệu thành các module có tổ chức: index, overview, config, provider, manager và with_distributed_lock
-- Cải thiện hướng dẫn sử dụng distributed lock với ví dụ chi tiết
-- Thêm tài liệu về cách cấu hình và troubleshooting
+- Updated documentation for feature X
+- Added examples for use case Y
 
 ## Breaking Changes
 ### ⚠️ Important Notes
-Không có breaking changes trong phiên bản này.
+- Breaking change 1 (if any)
+- Breaking change 2 (if any)
 
 ## Migration Guide
 See [MIGRATION.md](./MIGRATION.md) for detailed migration instructions.
 
 ## Dependencies
 ### Updated
-- go.fork.vn/config: v0.1.0 → v0.1.3
-- go.fork.vn/di: v0.1.0 → v0.1.3
-- go.fork.vn/redis: v0.1.0 → v0.1.2
+- dependency-name: vX.Y.Z → vA.B.C
 
-### Dependencies details
-- **go.fork.vn/config v0.1.3**: Latest configuration management improvements
-- **go.fork.vn/di v0.1.3**: Enhanced dependency injection features
-- **go.fork.vn/redis v0.1.2**: Updated Redis connectivity and distributed locking
+### Added
+- new-dependency: vX.Y.Z
+
+### Removed
+- removed-dependency: vX.Y.Z
 
 ## Performance
 - Benchmark improvement: X% faster in scenario Y
@@ -61,8 +56,8 @@ Thanks to all contributors who made this release possible:
 - @contributor2
 
 ## Download
-- Source code: [go.fork.vn/scheduler@v0.1.1]
-- Documentation: [pkg.go.dev/go.fork.vn/scheduler@v0.1.1]
+- Source code: [go.fork.vn/scheduler@v0.1.2]
+- Documentation: [pkg.go.dev/go.fork.vn/scheduler@v0.1.2]
 
 ---
 Release Date: 2025-06-04
