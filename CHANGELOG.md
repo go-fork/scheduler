@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## v0.1.1 - 2025-06-04
+
 ### Added
 - Automation scripts for release management and project maintenance
 - CODEOWNERS, FUNDING, and issue templates
