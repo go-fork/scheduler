@@ -1,108 +1,84 @@
 # Migration Guide - v0.1.1
 
 ## Overview
-This guide helps you migrate from the previous version to v0.1.1.
+Hướng dẫn này giúp bạn nâng cấp từ phiên bản v0.1.0 lên v0.1.1. Phiên bản v0.1.1 tập trung vào cải thiện tài liệu, cập nhật dependencies và sửa lỗi, không có breaking changes.
 
 ## Prerequisites
-- Go 1.23 or later
-- Previous version installed
+- Go 1.18 hoặc mới hơn
+- Phiên bản v0.1.0 đã cài đặt
 
 ## Quick Migration Checklist
-- [ ] Update import statements (if changed)
-- [ ] Update function calls (if signatures changed)
-- [ ] Update configuration (if format changed)
-- [ ] Run tests to ensure compatibility
-- [ ] Update documentation references
+- [ ] Cập nhật dependency đến v0.1.1
+- [ ] Kiểm tra mã nguồn với go.fork.vn/di v0.1.3
+- [ ] Chạy tests để đảm bảo tương thích
+- [ ] Xem tài liệu mới cho các tính năng cập nhật
 
 ## Breaking Changes
+Phiên bản v0.1.1 không có breaking changes so với v0.1.0.
 
-### API Changes
-#### Changed Functions
+### Interface Updates
+ServiceProvider interface đã được cập nhật để phù hợp với go.fork.vn/di v0.1.3. Nếu bạn đang triển khai interface này, hãy cập nhật chữ ký hàm:
+
 ```go
-// Old way (previous version)
-oldFunction(param1, param2)
+// Old way (v0.1.0)
+func (p *YourProvider) Register(app interface{})
+func (p *YourProvider) Boot(app interface{})
 
 // New way (v0.1.1)
-newFunction(param1, param2, newParam)
+func (p *YourProvider) Register(app di.Application)
+func (p *YourProvider) Boot(app di.Application)
 ```
 
-#### Removed Functions
-- `removedFunction()` - Use `newAlternativeFunction()` instead
-
-#### Changed Types
-```go
-// Old type definition
-type OldConfig struct {
-    Field1 string
-    Field2 int
-}
-
-// New type definition
-type NewConfig struct {
-    Field1 string
-    Field2 int64 // Changed from int
-    Field3 bool  // New field
-}
-```
-
-### Configuration Changes
-If you're using configuration files:
-
-```yaml
-# Old configuration format
-old_setting: value
-deprecated_option: true
-
-# New configuration format
-new_setting: value
-# deprecated_option removed
-new_option: false
-```
+### Documentation Changes
+Tài liệu đã được tái cấu trúc và mở rộng. Ví dụ mã cũ vẫn hoạt động, nhưng bạn nên sử dụng tài liệu mới để tìm hiểu các tính năng chi tiết hơn.
 
 ## Step-by-Step Migration
 
 ### Step 1: Update Dependencies
 ```bash
-go get go.fork.vn/scheduler@v0.1.1
+go get -u go.fork.vn/scheduler@v0.1.1
+go get -u go.fork.vn/di@v0.1.3
+go get -u go.fork.vn/config@v0.1.3
+go get -u go.fork.vn/redis@v0.1.2
 go mod tidy
 ```
 
-### Step 2: Update Import Statements
-```go
-// If import paths changed
-import (
-    "go.fork.vn/scheduler" // Updated import
-)
-```
-
-### Step 3: Update Code
-Replace deprecated function calls:
+### Step 2: Kiểm tra ServiceProvider nếu đã triển khai
+Nếu bạn đã mở rộng hoặc triển khai ServiceProvider, hãy cập nhật chữ ký hàm:
 
 ```go
-// Before
-result := scheduler.OldFunction(param)
+// Cập nhật từ interface{} sang di.Application
+func (p *YourProvider) Register(app di.Application) {
+    // Your code here
+}
 
-// After
-result := scheduler.NewFunction(param, defaultValue)
+// Cập nhật từ interface{} sang di.Application
+func (p *YourProvider) Boot(app di.Application) {
+    // Your code here
+}
 ```
 
-### Step 4: Update Configuration
-Update your configuration files according to the new schema.
+### Step 3: Xem tài liệu mới
+Khám phá tài liệu mới được tổ chức trong thư mục docs:
 
-### Step 5: Run Tests
+```bash
+ls -la docs/
+```
+
+### Step 4: Chạy Tests
 ```bash
 go test ./...
 ```
 
-## Common Issues and Solutions
+## Vấn đề thường gặp và giải pháp
 
-### Issue 1: Function Not Found
-**Problem**: `undefined: scheduler.OldFunction`  
-**Solution**: Replace with `scheduler.NewFunction`
+### Issue 1: Kiểu không tương thích với ServiceProvider
+**Vấn đề**: `cannot use app (variable of type interface{}) as di.Application value`  
+**Giải pháp**: Cập nhật chữ ký hàm Register và Boot như hướng dẫn ở trên
 
-### Issue 2: Type Mismatch
-**Problem**: `cannot use int as int64`  
-**Solution**: Cast the value or update variable type
+### Issue 2: Lỗi panic khi inject container
+**Vấn đề**: Scheduler panic khi inject container vì không xử lý nil container
+**Giải pháp**: Đã được sửa trong v0.1.1, cập nhật phiên bản sẽ giải quyết vấn đề
 
 ## Getting Help
 - Check the [documentation](https://pkg.go.dev/go.fork.vn/scheduler@v0.1.1)
