@@ -6,15 +6,21 @@
 - Automation scripts for release management and project maintenance
 - CODEOWNERS, FUNDING, and issue templates
 - Comprehensive CI/CD workflows
+- Tái cấu trúc tài liệu thành các module có tổ chức: index, overview, config, provider, manager và with_distributed_lock
+- Thêm config_test.go với test coverage đầy đủ cho các cấu trúc cấu hình
 
 ### Fixed
 - Updated copyright attribution in LICENSE file
 - Fixed references from mongodb to scheduler in CODEOWNERS, issue templates, and release workflow
+- Fixed ServiceProvider Interface để tương thích với go.fork.vn/di v0.1.3
+- Fixed type mismatch trong provider_test.go (*scheduler.schedulerManager -> *scheduler.manager)
+- Improved distributed lock test để xử lý Redis client validation
 
 ### Changed
 - Updated `go.fork.vn/config` from v0.1.0 to v0.1.3
 - Updated `go.fork.vn/di` from v0.1.0 to v0.1.3
 - Updated `go.fork.vn/redis` from v0.1.0 to v0.1.2
+- Cải thiện xử lý lỗi với panic messages rõ ràng cho các lỗi quan trọng
 
 ### Dependencies
 - **go.fork.vn/config v0.1.3**: Latest configuration management improvements

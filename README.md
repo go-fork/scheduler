@@ -13,6 +13,17 @@ Scheduler Provider là giải pháp lên lịch và chạy các task định k�
 - **Singleton Mode**: Hỗ trợ chế độ singleton để tránh chạy song song cùng một task
 - **Task Management**: Hỗ trợ tag để nhóm và quản lý các task
 
+## Tài liệu
+
+Xem tài liệu chi tiết tại:
+
+- [Tổng quan](docs/index.md) - Giới thiệu và sử dụng nhanh
+- [Kiến trúc](docs/overview.md) - Kiến trúc và tính năng chi tiết
+- [Cấu hình](docs/config.md) - Tùy chọn cấu hình
+- [Service Provider](docs/provider.md) - Tích hợp với DI container
+- [Manager API](docs/manager.md) - API lập lịch và quản lý jobs
+- [Distributed Locking](docs/with_distributed_lock.md) - Sử dụng Redis distributed locking
+
 ## Cài đặt
 
 ```bash
